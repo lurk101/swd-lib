@@ -16,8 +16,6 @@
 //
 #include "swdldr.h"
 
-#include "pico.h"
-
 #include "pico/sync.h"
 
 #include "hardware/clocks.h"
@@ -99,7 +97,6 @@
 
 static uint32_t clockPin, dataPin, resetPin, halfClockUs, resetAvailable;
 static critical_section_t critical;
-static char* errmsg;
 
 static void WriteClock(void) {
     gpio_put(clockPin, 0);
@@ -178,7 +175,7 @@ static int ReadData(uint8_t nRequest, uint32_t* pData) {
     if (nResponse != DP_OK) {
         ReadBits(TURN_CYCLES);
         EndTransaction();
-        //fprintf(stderr, "Cannot read (req 0x%02X, resp %u)\n", (uint32_t)nRequest, nResponse);
+        fprintf(stderr, "Cannot read (req 0x%02X, resp %u)\n", (uint32_t)nRequest, nResponse);
         return 0;
     }
     uint32_t nData = ReadBits(32);
@@ -186,7 +183,7 @@ static int ReadData(uint8_t nRequest, uint32_t* pData) {
     if (nParity != __builtin_parity(nData)) {
         ReadBits(TURN_CYCLES);
         EndTransaction();
-        //fprintf(stderr, "Parity error (req 0x%02X)\n", (uint32_t)nRequest);
+        fprintf(stderr, "Parity error (req 0x%02X)\n", (uint32_t)nRequest);
         return 0;
     }
     *pData = nData;
@@ -201,8 +198,8 @@ static int WriteData(uint8_t nRequest, uint32_t nData) {
     ReadBits(TURN_CYCLES);
     if (nResponse != DP_OK) {
         EndTransaction();
-        //fprintf(stderr, "Cannot write (req 0x%02X, data 0x%X, resp %u)\n", (uint32_t)nRequest,
-        //        nData, nResponse);
+        fprintf(stderr, "Cannot write (req 0x%02X, data 0x%X, resp %u)\n", (uint32_t)nRequest,
+                nData, nResponse);
         return 0;
     }
     WriteBits(nData, 32);
@@ -273,16 +270,16 @@ int SWDInitialize(uint32_t nClockPin, uint32_t nDataPin, uint32_t nResetPin,
     SelectTarget(DP_TARGETSEL_CPUAPID_SUPPORTED, DP_TARGETSEL_TINSTANCE_CORE0);
     uint32_t nIDCode;
     if (!ReadData(RD_DP_DPIDR, &nIDCode)) {
-        //fprintf(stderr, "Target does not respond\n");
+        fprintf(stderr, "Target does not respond\n");
         return 0;
     }
     if (nIDCode != DP_DPIDR_SUPPORTED) {
         EndTransaction();
-        //fprintf(stderr, "Debug target not supported (ID code 0x%X)\n", nIDCode);
+        fprintf(stderr, "Debug target not supported (ID code 0x%X)\n", nIDCode);
         return 0;
     }
     if (!PowerOn()) {
-        //fprintf(stderr, "Target connect failed\n");
+        fprintf(stderr, "Target connect failed\n");
         return 0;
     }
     EndTransaction();
@@ -304,8 +301,8 @@ int SWDLoad(const void* pProgram, uint32_t nProgSize, uint32_t nAddress) {
         return 0;
     uint32_t nEndTicks = time_us_32();
     double fDuration = (double)(nEndTicks - nStartTicks) / 1e6;
-    //fprintf(stderr, "%u bytes loaded in %.2f seconds (%.1f KBytes/s)\n", nProgSize, fDuration,
-    //        nProgSize / fDuration / 1024.0);
+    fprintf(stderr, "%u bytes loaded in %.2f seconds (%.1f KBytes/s)\n", nProgSize, fDuration,
+            nProgSize / fDuration / 1024.0);
     return SWDStart(nAddress);
 }
 
@@ -318,7 +315,7 @@ int SWDHalt(void) {
                                   AP_CSW_DBG_SW_ENABLE) ||
         !WriteMem(DHCSR,
                   DHCSR_C_DEBUGEN | DHCSR_C_HALT | (DHCSR_DBGKEY_KEY << DHCSR_DBGKEY__SHIFT))) {
-        //fprintf(stderr, "Target halt failed\n");
+        fprintf(stderr, "Target halt failed\n");
         rc = 0;
     }
     EndTransaction();
@@ -332,13 +329,13 @@ int SWDLoadChunk(const void* pChunk, uint32_t nChunkSize, uint32_t nAddress) {
     while (nChunkSize > 0) {
         BeginTransaction();
         if (!WriteData(WR_AP_TAR, nAddress)) {
-            //fprintf(stderr, "Cannot write TAR (0x%X)\n", nAddress);
+            fprintf(stderr, "Cannot write TAR (0x%X)\n", nAddress);
             return 0;
         }
         const size_t BlockSize = 1024;
         for (uint32_t i = 0; i < BlockSize; i += 4) {
             if (!WriteData(WR_AP_DRW, *pChunk32++)) {
-                //fprintf(stderr, "Memory write failed (0x%X)\n", nAddress);
+                fprintf(stderr, "Memory write failed (0x%X)\n", nAddress);
                 return 0;
             }
             if (nChunkSize > 4)
@@ -354,10 +351,10 @@ int SWDLoadChunk(const void* pChunk, uint32_t nChunkSize, uint32_t nAddress) {
     BeginTransaction();
     uint32_t nFirstWordRead;
     if (!ReadMem(nAddressCopy, &nFirstWordRead))
-        //fprintf(stderr, "Memory read failed (0x%X)\n", nAddressCopy);
+        fprintf(stderr, "Memory read failed (0x%X)\n", nAddressCopy);
     EndTransaction();
     if (nFirstWord != nFirstWordRead) {
-        //fprintf(stderr, "Data mismatch (0x%X != 0x%X)\n", nFirstWord, nFirstWordRead);
+        fprintf(stderr, "Data mismatch (0x%X != 0x%X)\n", nFirstWord, nFirstWordRead);
         return 0;
     }
     return 1;
@@ -369,7 +366,7 @@ int SWDStart(uint32_t nAddress) {
     if (!WriteMem(DCRDR, nAddress) ||
         !WriteMem(DCRSR, (DCRSR_REGSEL_R15 << DCRSR_REGSEL__SHIFT) | DCRSR_REGW_N_R) ||
         !WriteMem(DHCSR, DHCSR_C_DEBUGEN | (DHCSR_DBGKEY_KEY << DHCSR_DBGKEY__SHIFT))) {
-        //fprintf(stderr, "Target start failed\n");
+        fprintf(stderr, "Target start failed\n");
         rc = 0;
     }
     EndTransaction();
